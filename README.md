@@ -1,4 +1,7 @@
 # Scarlet.BlazorRouter
+[![NuGet](https://img.shields.io/nuget/v/Scarlet.BlazorRouter?color=ff4081&logo=nuget)](https://www.nuget.org/packages/Scarlet.BlazorRouter/)
+[![NuGet](https://img.shields.io/nuget/dt/Scarlet.BlazorRouter?color=ff4081&label=nuget%20downloads&logo=nuget)](https://www.nuget.org/packages/Scarlet.BlazorRouter/)
+[![GitHub](https://img.shields.io/github/license/ScarletKuro/Scarlet.BlazorRouter?color=594ae2&logo=github)](https://github.com/ScarletKuro/Scarlet.BlazorRouter/blob/main/LICENSE)
 
 `Scarlet.BlazorRouter` is an explicit-route alternative to Blazor's built-in `Router`.
 
