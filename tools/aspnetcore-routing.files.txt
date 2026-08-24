@@ -1,0 +1,91 @@
+# Manifest of ASP.NET Core sources vendored into src/Scarlet.BlazorRouter/Routing/.
+#
+# Format:  <upstream path within dotnet/aspnetcore> | <path relative to src/Scarlet.BlazorRouter/Routing/>
+# Lines starting with '#' and blank lines are ignored.
+#
+# This list mirrors src/Components/Components/src/Microsoft.AspNetCore.Components.Routing.targets,
+# which is how Microsoft.AspNetCore.Components.dll itself gets these types without taking a
+# dependency on the Microsoft.AspNetCore.Routing package. Everything compiles as `internal`
+# because the project defines the COMPONENTS symbol.
+#
+# Run tools/sync-aspnetcore-routing.ps1 to refresh. Do not edit the copied files.
+
+# --- Abstractions ---
+src/Http/Http.Abstractions/src/Routing/RouteValueDictionary.cs      | RouteValueDictionary.cs
+src/Http/Routing.Abstractions/src/IRouteConstraint.cs               | IRouteConstraint.cs
+src/Http/Routing.Abstractions/src/IParameterPolicy.cs               | IParameterPolicy.cs
+
+# --- Infrastructure ---
+src/Http/Routing/src/RouteValueEqualityComparer.cs                  | RouteValueEqualityComparer.cs
+src/Http/Routing/src/RouteCreationException.cs                      | RouteCreationException.cs
+src/Http/Routing/src/PathTokenizer.cs                               | PathTokenizer.cs
+
+# --- Tree router for matching (Outbound*/LinkGeneration* deliberately excluded) ---
+src/Http/Routing/src/Tree/InboundMatch.cs                           | Tree/InboundMatch.cs
+src/Http/Routing/src/Tree/InboundRouteEntry.cs                      | Tree/InboundRouteEntry.cs
+src/Http/Routing/src/Tree/TreeEnumerator.cs                         | Tree/TreeEnumerator.cs
+src/Http/Routing/src/Tree/TreeRouteBuilder.cs                       | Tree/TreeRouteBuilder.cs
+src/Http/Routing/src/Tree/TreeRouter.cs                             | Tree/TreeRouter.cs
+src/Http/Routing/src/Tree/UrlMatchingNode.cs                        | Tree/UrlMatchingNode.cs
+src/Http/Routing/src/Tree/UrlMatchingTree.cs                        | Tree/UrlMatchingTree.cs
+
+# --- Route patterns (*RoutePatternTransformer deliberately excluded) ---
+src/Http/Routing/src/Template/RoutePrecedence.cs                    | Patterns/RoutePrecedence.cs
+src/Http/Routing/src/Patterns/RouteParameterParser.cs               | Patterns/RouteParameterParser.cs
+src/Http/Routing/src/Patterns/RoutePattern.cs                       | Patterns/RoutePattern.cs
+src/Http/Routing/src/Patterns/RoutePatternException.cs              | Patterns/RoutePatternException.cs
+src/Http/Routing/src/Patterns/RoutePatternFactory.cs                | Patterns/RoutePatternFactory.cs
+src/Http/Routing/src/Patterns/RoutePatternLiteralPart.cs            | Patterns/RoutePatternLiteralPart.cs
+src/Http/Routing/src/Patterns/RoutePatternMatcher.cs                | Patterns/RoutePatternMatcher.cs
+src/Http/Routing/src/Patterns/RoutePatternParameterKind.cs          | Patterns/RoutePatternParameterKind.cs
+src/Http/Routing/src/Patterns/RoutePatternParameterPart.cs          | Patterns/RoutePatternParameterPart.cs
+src/Http/Routing/src/Patterns/RoutePatternParameterPolicyReference.cs | Patterns/RoutePatternParameterPolicyReference.cs
+src/Http/Routing/src/Patterns/RoutePatternParser.cs                 | Patterns/RoutePatternParser.cs
+src/Http/Routing/src/Patterns/RoutePatternPart.cs                   | Patterns/RoutePatternPart.cs
+src/Http/Routing/src/Patterns/RoutePatternPartKind.cs               | Patterns/RoutePatternPartKind.cs
+src/Http/Routing/src/Patterns/RoutePatternPathSegment.cs            | Patterns/RoutePatternPathSegment.cs
+src/Http/Routing/src/Patterns/RoutePatternSeparatorPart.cs          | Patterns/RoutePatternSeparatorPart.cs
+
+# --- Route constraints ---
+src/Http/Routing/src/DefaultInlineConstraintResolver.cs             | DefaultInlineConstraintResolver.cs
+src/Http/Routing/src/ParameterPolicyActivator.cs                    | ParameterPolicyActivator.cs
+src/Http/Routing/src/RouteConstraintBuilder.cs                      | RouteConstraintBuilder.cs
+src/Http/Routing/src/RouteConstraintMatcher.cs                      | RouteConstraintMatcher.cs
+src/Http/Routing/src/RouteOptions.cs                                | RouteOptions.cs
+src/Http/Routing/src/IInlineConstraintResolver.cs                   | IInlineConstraintResolver.cs
+
+# HttpMethodRouteConstraint / RequiredRouteConstraint / StringRouteConstraint deliberately excluded
+src/Http/Routing/src/Constraints/AlphaRouteConstraint.cs            | Constraints/AlphaRouteConstraint.cs
+src/Http/Routing/src/Constraints/BoolRouteConstraint.cs             | Constraints/BoolRouteConstraint.cs
+src/Http/Routing/src/Constraints/CompositeRouteConstraint.cs        | Constraints/CompositeRouteConstraint.cs
+src/Http/Routing/src/Constraints/DateTimeRouteConstraint.cs         | Constraints/DateTimeRouteConstraint.cs
+src/Http/Routing/src/Constraints/DecimalRouteConstraint.cs          | Constraints/DecimalRouteConstraint.cs
+src/Http/Routing/src/Constraints/DoubleRouteConstraint.cs           | Constraints/DoubleRouteConstraint.cs
+src/Http/Routing/src/Constraints/FileNameRouteConstraint.cs         | Constraints/FileNameRouteConstraint.cs
+src/Http/Routing/src/Constraints/FloatRouteConstraint.cs            | Constraints/FloatRouteConstraint.cs
+src/Http/Routing/src/Constraints/GuidRouteConstraint.cs             | Constraints/GuidRouteConstraint.cs
+src/Http/Routing/src/Constraints/IntRouteConstraint.cs              | Constraints/IntRouteConstraint.cs
+src/Http/Routing/src/Constraints/LengthRouteConstraint.cs           | Constraints/LengthRouteConstraint.cs
+src/Http/Routing/src/Constraints/LongRouteConstraint.cs             | Constraints/LongRouteConstraint.cs
+src/Http/Routing/src/Constraints/MaxLengthRouteConstraint.cs        | Constraints/MaxLengthRouteConstraint.cs
+src/Http/Routing/src/Constraints/MaxRouteConstraint.cs              | Constraints/MaxRouteConstraint.cs
+src/Http/Routing/src/Constraints/MinLengthRouteConstraint.cs        | Constraints/MinLengthRouteConstraint.cs
+src/Http/Routing/src/Constraints/MinRouteConstraint.cs              | Constraints/MinRouteConstraint.cs
+src/Http/Routing/src/Constraints/NonFileNameRouteConstraint.cs      | Constraints/NonFileNameRouteConstraint.cs
+src/Http/Routing/src/Constraints/NullRouteConstraint.cs             | Constraints/NullRouteConstraint.cs
+src/Http/Routing/src/Constraints/OptionalRouteConstraint.cs         | Constraints/OptionalRouteConstraint.cs
+src/Http/Routing/src/Constraints/RangeRouteConstraint.cs            | Constraints/RangeRouteConstraint.cs
+src/Http/Routing/src/Constraints/RegexErrorStubRouteConstraint.cs   | Constraints/RegexErrorStubRouteConstraint.cs
+src/Http/Routing/src/Constraints/RegexInlineRouteConstraint.cs      | Constraints/RegexInlineRouteConstraint.cs
+src/Http/Routing/src/Constraints/RegexRouteConstraint.cs            | Constraints/RegexRouteConstraint.cs
+
+# --- Shared helpers the files above reference ---
+src/Shared/LinkerFlags.cs                                           | Shared/LinkerFlags.cs
+src/Shared/Debugger/DictionaryDebugView.cs                          | Shared/DictionaryDebugView.cs
+src/Shared/Debugger/DictionaryItemDebugView.cs                      | Shared/DictionaryItemDebugView.cs
+src/Shared/UrlDecoder/UrlDecoder.cs                                 | Shared/UrlDecoder.cs
+
+# --- Blazor-side glue (the COMPONENTS variants of the routing sources bind to these) ---
+src/Components/Components/src/Routing/PathString.cs                 | Components/PathString.cs
+src/Components/Components/src/Routing/RouteContext.cs               | Components/RouteContext.cs
+src/Components/Components/src/Routing/RegexConstraintSupport.cs     | Components/RegexConstraintSupport.cs

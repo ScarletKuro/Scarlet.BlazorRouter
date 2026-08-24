@@ -110,6 +110,63 @@ public sealed class BlazorRouterTests : BunitContext
     }
 
     [Fact]
+    public void DecodesPercentEncodedPathBeforeMatching()
+    {
+        NavigateTo("/docs/hello%20world");
+
+        var cut = RenderRouter(
+            routes:
+            [
+                new("/docs/{slug}", typeof(SlugPage)),
+            ]);
+
+        cut.Find("p").MarkupMatches("<p>Slug:hello world</p>");
+    }
+
+    [Fact]
+    public void DecodesPercentEncodedLiteralSegments()
+    {
+        NavigateTo("/user%20guide/intro");
+
+        var cut = RenderRouter(
+            routes:
+            [
+                new("/user guide/{slug}", typeof(SlugPage)),
+            ]);
+
+        cut.Find("p").MarkupMatches("<p>Slug:intro</p>");
+    }
+
+    [Fact]
+    public void AppliesRegexConstraints()
+    {
+        NavigateTo("/codes/abc");
+
+        var cut = RenderRouter(
+            routes:
+            [
+                new("/codes/{slug:regex(^[a-z]+$)}", typeof(SlugPage)),
+            ]);
+
+        cut.Find("p").MarkupMatches("<p>Slug:abc</p>");
+    }
+
+    [Fact]
+    public void DoesNotMatchWhenRegexConstraintRejectsTheValue()
+    {
+        NavigateTo("/codes/123");
+
+        var cut = RenderRouter(
+            routes:
+            [
+                new("/codes/{slug:regex(^[a-z]+$)}", typeof(SlugPage)),
+            ],
+            notFoundPage: typeof(NoRouteNotFoundPage));
+
+        cut.Find("p").MarkupMatches("<p>No route not found</p>");
+    }
+
+    [Fact]
     public void AddsNullForUnusedRouteParametersAcrossTemplates()
     {
         NavigateTo("/dashboard");
@@ -137,6 +194,10 @@ public sealed class BlazorRouterTests : BunitContext
             ]));
 
         Assert.Contains("ambiguous", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("items/{id}", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("items/{value}", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(typeof(HomePage).FullName!, exception.Message, StringComparison.Ordinal);
+        Assert.Contains(typeof(ProductPage).FullName!, exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]

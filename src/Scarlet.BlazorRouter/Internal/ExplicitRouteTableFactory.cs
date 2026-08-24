@@ -1,108 +1,76 @@
 using System.Diagnostics.CodeAnalysis;
+using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Routing;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Routing.Constraints;
-using Microsoft.AspNetCore.Routing.Template;
+using Microsoft.AspNetCore.Routing.Patterns;
+using Microsoft.AspNetCore.Routing.Tree;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Microsoft.AspNetCore.Components;
 
 namespace Scarlet.BlazorRouter;
 
+/// <summary>
+/// Builds the tree router that backs <see cref="ExplicitRouteTable"/>.
+/// </summary>
+/// <remarks>
+/// This mirrors <c>Microsoft.AspNetCore.Components.RouteTableFactory</c>, except that the templates come from the
+/// explicitly supplied <see cref="BlazorRouteDefinition"/> list rather than from a <c>[Route]</c> attribute scan.
+/// </remarks>
 internal static class ExplicitRouteTableFactory
 {
     public static ExplicitRouteTable Create(IReadOnlyList<BlazorRouteDefinition> routes, IServiceProvider serviceProvider)
     {
-        var resolver = CreateConstraintResolver(serviceProvider);
-        var unusedRouteParameterNames = BuildUnusedRouteParameterMap(routes);
-        var entries = new List<ExplicitRouteTable.ExplicitRouteEntry>(routes.Count);
+        var routeOptions = Options.Create(new RouteOptions());
+        if (!OperatingSystem.IsBrowser() || RegexConstraintSupport.IsEnabled)
+        {
+            routeOptions.Value.SetParameterPolicy("regex", typeof(RegexInlineRouteConstraint));
+        }
+
+        var builder = new TreeRouteBuilder(
+            serviceProvider.GetRequiredService<ILoggerFactory>(),
+            new DefaultInlineConstraintResolver(routeOptions, serviceProvider));
+
+        // A page can be reached through several templates, and Blazor passes null for any parameter the matched
+        // template does not supply. So parse everything first to learn the full parameter set per page type, then map.
+        var parsedRoutes = new List<(BlazorRouteDefinition Route, RoutePattern Pattern, HashSet<string> ParameterNames)>(routes.Count);
+        var allParameterNamesByPageType = new Dictionary<Type, HashSet<string>>();
 
         foreach (var route in routes)
         {
             ValidateRoute(route);
 
-            var template = TemplateParser.Parse(route.Template);
-            var constraints = BuildConstraints(template, resolver);
-            var precedence = RoutePrecedence.ComputeInbound(template);
-            entries.Add(new ExplicitRouteTable.ExplicitRouteEntry(
-                route,
-                template,
-                precedence,
-                constraints,
-                unusedRouteParameterNames[(route.PageType, route.Template)]));
-        }
+            var pattern = RoutePatternParser.Parse(route.Template);
+            var parameterNames = GetParameterNames(pattern);
+            parsedRoutes.Add((route, pattern, parameterNames));
 
-        DetectAmbiguousRoutes(entries);
-        entries.Sort(ExplicitRouteEntryComparer.Instance);
-
-        return new ExplicitRouteTable(entries);
-    }
-
-    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "The router only registers the built-in regex inline constraint mapping and does not enumerate or add arbitrary user-supplied constraint types.")]
-    private static DefaultInlineConstraintResolver CreateConstraintResolver(IServiceProvider serviceProvider)
-    {
-        var routeOptions = new RouteOptions();
-        if (!OperatingSystem.IsBrowser())
-        {
-            routeOptions.ConstraintMap["regex"] = typeof(RegexInlineRouteConstraint);
-        }
-
-        var options = Options.Create(routeOptions);
-
-        var resolverType = typeof(DefaultInlineConstraintResolver);
-        var twoArgumentConstructor = resolverType.GetConstructor([typeof(IOptions<RouteOptions>), typeof(IServiceProvider)]);
-        if (twoArgumentConstructor is not null)
-        {
-            return (DefaultInlineConstraintResolver)twoArgumentConstructor.Invoke([options, serviceProvider]);
-        }
-
-        var oneArgumentConstructor = resolverType.GetConstructor([typeof(IOptions<RouteOptions>)]);
-        if (oneArgumentConstructor is not null)
-        {
-            return (DefaultInlineConstraintResolver)oneArgumentConstructor.Invoke([options]);
-        }
-
-        throw new InvalidOperationException($"Unable to create {resolverType.FullName}.");
-    }
-
-    private static Dictionary<(Type PageType, string Template), IReadOnlyList<string>> BuildUnusedRouteParameterMap(
-        IReadOnlyList<BlazorRouteDefinition> routes)
-    {
-        var allParametersByPage = new Dictionary<Type, HashSet<string>>();
-        var templateParameters = new List<(BlazorRouteDefinition Route, HashSet<string> Parameters)>(routes.Count);
-
-        foreach (var route in routes)
-        {
-            ValidateRoute(route);
-
-            var template = TemplateParser.Parse(route.Template);
-            var parameterNames = template.Parameters
-                .Select(parameter => parameter.Name!)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-            templateParameters.Add((route, parameterNames));
-
-            if (!allParametersByPage.TryGetValue(route.PageType, out var names))
+            if (!allParameterNamesByPageType.TryGetValue(route.PageType, out var allParameterNames))
             {
-                names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                allParametersByPage[route.PageType] = names;
+                allParameterNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                allParameterNamesByPageType[route.PageType] = allParameterNames;
             }
 
-            foreach (var parameterName in parameterNames)
-            {
-                names.Add(parameterName);
-            }
+            allParameterNames.UnionWith(parameterNames);
         }
 
-        var result = new Dictionary<(Type PageType, string Template), IReadOnlyList<string>>();
-        foreach (var item in templateParameters)
+        var entriesByRoute = new Dictionary<ExplicitRouteTable.EntryKey, InboundRouteEntry>();
+
+        foreach (var (route, pattern, parameterNames) in parsedRoutes)
         {
-            var unusedParameters = allParametersByPage[item.Route.PageType]
-                .Where(name => !item.Parameters.Contains(name))
-                .ToArray();
+            // route.PageType carries the DynamicallyAccessedMembers annotation MapInbound requires; passing it
+            // directly (rather than via a Dictionary key) is what keeps the trim analyzer satisfied.
+            var entry = builder.MapInbound(
+                route.PageType,
+                pattern,
+                GetUnusedParameterNames(allParameterNamesByPageType[route.PageType], parameterNames));
 
-            result[(item.Route.PageType, item.Route.Template)] = unusedParameters;
+            entriesByRoute[new ExplicitRouteTable.EntryKey(route.PageType, route.Template)] = entry;
         }
 
-        return result;
+        DetectAmbiguousRoutes(builder);
+
+        return new ExplicitRouteTable(builder.Build(), entriesByRoute);
     }
 
     private static void ValidateRoute(BlazorRouteDefinition route)
@@ -118,108 +86,79 @@ internal static class ExplicitRouteTableFactory
         }
     }
 
-    private static Dictionary<string, IRouteConstraint> BuildConstraints(
-        RouteTemplate template,
-        IInlineConstraintResolver resolver)
+    private static HashSet<string> GetParameterNames(RoutePattern pattern)
     {
-        var result = new Dictionary<string, IRouteConstraint>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var parameter in template.Parameters)
+        var parameterNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var parameter in pattern.Parameters)
         {
-            var constraints = new List<IRouteConstraint>();
-            foreach (var inlineConstraint in parameter.InlineConstraints)
-            {
-                var resolved = resolver.ResolveConstraint(inlineConstraint.Constraint);
-                if (resolved is null)
-                {
-                    throw new InvalidOperationException(
-                        $"Unable to resolve the constraint '{inlineConstraint.Constraint}' in route '{template.TemplateText}'.");
-                }
+            parameterNames.Add(parameter.Name);
+        }
 
-                constraints.Add(resolved);
-            }
+        return parameterNames;
+    }
 
-            if (constraints.Count == 1)
+    private static List<string>? GetUnusedParameterNames(HashSet<string> allRouteParameterNames, HashSet<string> routeParameterNames)
+    {
+        List<string>? unusedParameters = null;
+        foreach (var name in allRouteParameterNames)
+        {
+            if (!routeParameterNames.Contains(name))
             {
-                result[parameter.Name!] = constraints[0];
-            }
-            else if (constraints.Count > 1)
-            {
-                result[parameter.Name!] = new CompositeRouteConstraint(constraints);
+                unusedParameters ??= [];
+                unusedParameters.Add(name);
             }
         }
 
-        return result;
+        return unusedParameters;
     }
 
-    private static void DetectAmbiguousRoutes(IReadOnlyList<ExplicitRouteTable.ExplicitRouteEntry> entries)
+    private static void DetectAmbiguousRoutes(TreeRouteBuilder builder)
     {
-        var seen = new HashSet<ExplicitRouteTable.ExplicitRouteEntry>(ExplicitRouteAmbiguityComparer.Instance);
-        foreach (var current in entries)
+        var seen = new HashSet<InboundRouteEntry>(InboundRouteEntryAmbiguityEqualityComparer.Instance);
+        seen.EnsureCapacity(builder.InboundEntries.Count);
+
+        for (var index = 0; index < builder.InboundEntries.Count; index++)
         {
+            var current = builder.InboundEntries[index];
             if (seen.Add(current))
             {
                 continue;
             }
 
-            var existing = seen.First(entry => ExplicitRouteAmbiguityComparer.Instance.Equals(entry, current));
+            seen.TryGetValue(current, out var existing);
             throw new InvalidOperationException(
                 $"""
                 The following routes are ambiguous:
-                '{existing.Template.TemplateText!.Trim('/')}' in '{existing.Route.PageType.FullName}'
-                '{current.Template.TemplateText!.Trim('/')}' in '{current.Route.PageType.FullName}'
+                '{existing!.RoutePattern.RawText!.Trim('/')}' in '{existing.Handler.FullName}'
+                '{current.RoutePattern.RawText!.Trim('/')}' in '{current.Handler.FullName}'
                 """);
         }
     }
 
-    private sealed class ExplicitRouteEntryComparer : IComparer<ExplicitRouteTable.ExplicitRouteEntry>
+    /// <summary>
+    /// Two routes are ambiguous when they have the same precedence and their literal segments match case-insensitively,
+    /// which means neither could ever be selected deterministically over the other.
+    /// </summary>
+    private sealed class InboundRouteEntryAmbiguityEqualityComparer : IEqualityComparer<InboundRouteEntry>
     {
-        public static ExplicitRouteEntryComparer Instance { get; } = new();
+        public static InboundRouteEntryAmbiguityEqualityComparer Instance { get; } = new();
 
-        public int Compare(ExplicitRouteTable.ExplicitRouteEntry? x, ExplicitRouteTable.ExplicitRouteEntry? y)
-        {
-            if (ReferenceEquals(x, y))
-            {
-                return 0;
-            }
-
-            if (x is null)
-            {
-                return -1;
-            }
-
-            if (y is null)
-            {
-                return 1;
-            }
-
-            var result = y.Precedence.CompareTo(x.Precedence);
-            return result != 0
-                ? result
-                : string.Compare(x.Template.TemplateText, y.Template.TemplateText, StringComparison.OrdinalIgnoreCase);
-        }
-    }
-
-    private sealed class ExplicitRouteAmbiguityComparer : IEqualityComparer<ExplicitRouteTable.ExplicitRouteEntry>
-    {
-        public static ExplicitRouteAmbiguityComparer Instance { get; } = new();
-
-        public bool Equals(ExplicitRouteTable.ExplicitRouteEntry? x, ExplicitRouteTable.ExplicitRouteEntry? y)
+        public bool Equals(InboundRouteEntry? x, InboundRouteEntry? y)
         {
             if (x is null)
             {
                 return y is null;
             }
 
-            if (y is null || x.Precedence != y.Precedence || x.Template.Segments.Count != y.Template.Segments.Count)
+            if (y is null || x.Precedence != y.Precedence)
             {
                 return false;
             }
 
-            for (var segmentIndex = 0; segmentIndex < x.Template.Segments.Count; segmentIndex++)
+            for (var segmentIndex = 0; segmentIndex < x.RoutePattern.PathSegments.Count; segmentIndex++)
             {
-                var leftSegment = x.Template.Segments[segmentIndex];
-                var rightSegment = y.Template.Segments[segmentIndex];
+                var leftSegment = x.RoutePattern.PathSegments[segmentIndex];
+                var rightSegment = y.RoutePattern.PathSegments[segmentIndex];
                 if (leftSegment.Parts.Count != rightSegment.Parts.Count)
                 {
                     return false;
@@ -227,16 +166,9 @@ internal static class ExplicitRouteTableFactory
 
                 for (var partIndex = 0; partIndex < leftSegment.Parts.Count; partIndex++)
                 {
-                    var leftPart = leftSegment.Parts[partIndex];
-                    var rightPart = rightSegment.Parts[partIndex];
-
-                    if (leftPart.IsLiteral != rightPart.IsLiteral)
-                    {
-                        return false;
-                    }
-
-                    if (leftPart.IsLiteral &&
-                        !string.Equals(leftPart.Text, rightPart.Text, StringComparison.OrdinalIgnoreCase))
+                    if (leftSegment.Parts[partIndex] is RoutePatternLiteralPart leftLiteral &&
+                        rightSegment.Parts[partIndex] is RoutePatternLiteralPart rightLiteral &&
+                        !string.Equals(leftLiteral.Content, rightLiteral.Content, StringComparison.OrdinalIgnoreCase))
                     {
                         return false;
                     }
@@ -246,20 +178,20 @@ internal static class ExplicitRouteTableFactory
             return true;
         }
 
-        public int GetHashCode(ExplicitRouteTable.ExplicitRouteEntry obj)
+        [SuppressMessage("Design", "CA1062:Validate arguments of public methods", Justification = "Only ever called by HashSet with non-null entries.")]
+        public int GetHashCode(InboundRouteEntry obj)
         {
             var hash = new HashCode();
             hash.Add(obj.Precedence);
 
-            for (var segmentIndex = 0; segmentIndex < obj.Template.Segments.Count; segmentIndex++)
+            for (var segmentIndex = 0; segmentIndex < obj.RoutePattern.PathSegments.Count; segmentIndex++)
             {
-                var segment = obj.Template.Segments[segmentIndex];
+                var segment = obj.RoutePattern.PathSegments[segmentIndex];
                 for (var partIndex = 0; partIndex < segment.Parts.Count; partIndex++)
                 {
-                    var part = segment.Parts[partIndex];
-                    if (part.IsLiteral)
+                    if (segment.Parts[partIndex] is RoutePatternLiteralPart literal)
                     {
-                        hash.Add(part.Text, StringComparer.OrdinalIgnoreCase);
+                        hash.Add(literal.Content, StringComparer.OrdinalIgnoreCase);
                     }
                 }
             }

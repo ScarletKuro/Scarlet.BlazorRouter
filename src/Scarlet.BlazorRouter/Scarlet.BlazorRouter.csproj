@@ -5,6 +5,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+
+    <!-- Required by the vendored Routing/Components/RouteContext.cs, which is [SkipLocalsInit]. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IsPackable>true</IsPackable>
     <Authors>ScarletKuro</Authors>
     <Description>Explicit route-based Blazor router that uses a provided route list instead of assembly scanning.</Description>
@@ -17,6 +20,14 @@
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+
+    <!--
+      Routing/ holds ASP.NET Core routing sources compiled straight into this assembly. The COMPONENTS
+      symbol is what upstream uses to build those same files into Microsoft.AspNetCore.Components.dll:
+      it makes every type internal and strips the HttpContext/IRouter/ObjectPool code paths, which is
+      how we avoid a Microsoft.AspNetCore.Routing package reference. See tools/sync-aspnetcore-routing.ps1.
+    -->
+    <DefineConstants>$(DefineConstants);COMPONENTS</DefineConstants>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
@@ -24,10 +35,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.6" />
-    <PackageReference Include="Microsoft.AspNetCore.Http" Version="2.3.0" />
-    <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.3.0" />
-    <PackageReference Include="Microsoft.AspNetCore.Routing" Version="2.3.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.0" />
     <PackageReference Include="Nerdbank.GitVersioning" Version="3.6.133" PrivateAssets="all" />
   </ItemGroup>
 

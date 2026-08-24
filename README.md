@@ -197,6 +197,21 @@ That means your pages can be plain components referenced only from the explicit 
 - `FocusOnNavigate` works unchanged.
 - `NotFoundPage` can be any component type. It does not need `@page`.
 
+## Dependencies
+
+The package has exactly one dependency: `Microsoft.AspNetCore.Components.Web`.
+
+Route matching normally means referencing `Microsoft.AspNetCore.Routing`, whose last standalone release is **2.3.0** —
+everything after it lives only in the `Microsoft.AspNetCore.App` shared framework. Taking that reference would push
+eight ASP.NET Core 2.x packages (`Microsoft.AspNetCore.Http`, `.Http.Features`, `.WebUtilities`,
+`Microsoft.Net.Http.Headers`, …) onto Blazor WebAssembly, MAUI, WPF and WinForms apps that cannot use any of them.
+
+Instead this library does what `Microsoft.AspNetCore.Components.dll` itself does: it compiles the ASP.NET Core routing
+sources directly into its own assembly as `internal` types, under the same `COMPONENTS` compilation symbol Microsoft
+uses. Matching, precedence, inline constraints and parameter conversion are therefore the exact code the built-in
+`Router` runs, not a reimplementation. See [`src/Scarlet.BlazorRouter/Routing/README.md`](src/Scarlet.BlazorRouter/Routing/README.md)
+for provenance and how to refresh those files.
+
 ## Validation Rules
 
 The library throws if:

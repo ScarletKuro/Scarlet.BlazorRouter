@@ -24,6 +24,10 @@ jobs:
             test/**/*.csproj
             version.json
 
+      - name: Verify vendored routing sources
+        shell: pwsh
+        run: ./tools/sync-aspnetcore-routing.ps1 -Verify
+
       - name: Restore
         run: dotnet restore Scarlet.BlazorRouter.slnx
 
