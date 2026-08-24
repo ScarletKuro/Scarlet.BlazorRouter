@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/sample/">
+    <Project Path="samples/Scarlet.BlazorRouter.InteractiveServerSample/Scarlet.BlazorRouter.InteractiveServerSample.csproj" />
+    <Project Path="samples/Scarlet.BlazorRouter.WasmStandaloneSample/Scarlet.BlazorRouter.WasmStandaloneSample.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Scarlet.BlazorRouter/Scarlet.BlazorRouter.csproj" />
+  </Folder>
+  <Folder Name="/test/">
+    <Project Path="test/Scarlet.BlazorRouter.Tests/Scarlet.BlazorRouter.Tests.csproj" />
+  </Folder>
+</Solution>

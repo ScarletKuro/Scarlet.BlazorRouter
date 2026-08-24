@@ -1,0 +1,15 @@
+<BlazorRouter Routes="@_routes" NotFoundPage="@typeof(NotFound)">
+    <Found Context="routeData">
+        <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+        <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+    </Found>
+</BlazorRouter>
+
+@code {
+    private readonly IReadOnlyList<BlazorRouteDefinition> _routes =
+    [
+        new("/", typeof(Home)),
+        new("/counter", typeof(Counter)),
+        new("/weather", typeof(Weather)),
+    ];
+}
