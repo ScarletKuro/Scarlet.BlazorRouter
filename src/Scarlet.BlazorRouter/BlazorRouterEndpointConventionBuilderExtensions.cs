@@ -1,99 +1,32 @@
-using System.Diagnostics.CodeAnalysis;
-using System.Reflection;
+using System.Collections;
+using System.Runtime.CompilerServices;
 
 namespace Scarlet.BlazorRouter;
 
 public static class BlazorRouterEndpointConventionBuilderExtensions
 {
-    [RequiresUnreferencedCode("Uses reflection over ASP.NET Core internal Razor component endpoint builder types to register explicit component pages for interactive server hosting.")]
-    public static TBuilder AddBlazorRouterRoutes<TBuilder>(this TBuilder builder, IReadOnlyList<BlazorRouteDefinition> routes)
+    private const string ComponentApplicationBuilderTypeName = "Microsoft.AspNetCore.Components.Discovery.ComponentApplicationBuilder, Microsoft.AspNetCore.Components.Endpoints";
+    private const string ComponentApplicationBuilderActionsTypeName = "System.Collections.Generic.List`1[[System.Action`1[[Microsoft.AspNetCore.Components.Discovery.ComponentApplicationBuilder, Microsoft.AspNetCore.Components.Endpoints]]]]";
+    private const string PageCollectionBuilderTypeName = "Microsoft.AspNetCore.Components.Discovery.PageCollectionBuilder, Microsoft.AspNetCore.Components.Endpoints";
+    private const string PageComponentBuilderTypeName = "Microsoft.AspNetCore.Components.Discovery.PageComponentBuilder, Microsoft.AspNetCore.Components.Endpoints";
+    private const string PageComponentBuilderReadOnlyListTypeName = "System.Collections.Generic.IReadOnlyList`1[[Microsoft.AspNetCore.Components.Discovery.PageComponentBuilder, Microsoft.AspNetCore.Components.Endpoints]]";
+
+    public static TBuilder AddBlazorRouterRoutes<TBuilder>(
+        this TBuilder builder,
+        IReadOnlyList<BlazorRouteDefinition> routes)
         where TBuilder : class
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(routes);
 
-        var builderType = builder.GetType();
-        var applicationBuilderProperty = builderType.GetProperty(
-            "ApplicationBuilder",
-            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-
-        if (applicationBuilderProperty?.GetValue(builder) is { } applicationBuilder)
-        {
-            ApplyRoutesToApplicationBuilder(applicationBuilder, builderType.Assembly, routes);
-            return builder;
-        }
-
-        var componentApplicationBuilderActionsProperty = builderType.GetProperty(
-            "ComponentApplicationBuilderActions",
-            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-
-        if (componentApplicationBuilderActionsProperty?.GetValue(builder) is System.Collections.IList actions)
-        {
-            var applicationBuilderType = builderType.Assembly.GetType("Microsoft.AspNetCore.Components.Discovery.ComponentApplicationBuilder")
-                ?? throw new InvalidOperationException("Unable to locate the ASP.NET Core component application builder type.");
-
-            var delegateFactory = new ComponentApplicationBuilderActionFactory(builderType.Assembly, routes);
-            var delegateType = typeof(Action<>).MakeGenericType(applicationBuilderType);
-            var method = typeof(ComponentApplicationBuilderActionFactory)
-                .GetMethod(nameof(ComponentApplicationBuilderActionFactory.Apply), BindingFlags.Instance | BindingFlags.NonPublic)!
-                .MakeGenericMethod(applicationBuilderType);
-
-            actions.Add(Delegate.CreateDelegate(delegateType, delegateFactory, method));
-            return builder;
-        }
-
-        throw new InvalidOperationException(
-            $"The provided builder type '{builderType.FullName}' does not expose the Razor component application builder.");
+        var actions = (IList)EndpointConventionBuilderAccessors.GetComponentApplicationBuilderActions(builder);
+        actions.Add((Action<object>)(applicationBuilder => ApplyRoutesToApplicationBuilder(applicationBuilder, routes)));
+        return builder;
     }
 
-    [RequiresUnreferencedCode("Uses reflection over ASP.NET Core internal Razor component endpoint builder types to register explicit component pages for interactive server hosting.")]
-    private static void ApplyRoutesToApplicationBuilder(object applicationBuilder, Assembly endpointsAssembly, IReadOnlyList<BlazorRouteDefinition> routes)
+    private static void ApplyRoutesToApplicationBuilder(object applicationBuilder, IReadOnlyList<BlazorRouteDefinition> routes)
     {
-        var applicationBuilderType = applicationBuilder.GetType();
-        var pagesProperty = applicationBuilderType.GetProperty(
-            "Pages",
-            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-
-        if (pagesProperty?.GetValue(applicationBuilder) is not { } pagesBuilder)
-        {
-            throw new InvalidOperationException(
-                $"The Razor component application builder type '{applicationBuilderType.FullName}' does not expose page collection support.");
-        }
-
-        var pagesBuilderType = pagesBuilder.GetType();
-        var pageComponentBuilderType = endpointsAssembly.GetType("Microsoft.AspNetCore.Components.Discovery.PageComponentBuilder")
-            ?? throw new InvalidOperationException("Unable to locate the ASP.NET Core page component builder type.");
-
-        var removeFromAssemblyMethod = pagesBuilderType.GetMethod(
-            "RemoveFromAssembly",
-            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-            binder: null,
-            [typeof(string)],
-            modifiers: null)
-            ?? throw new InvalidOperationException("Unable to locate the ASP.NET Core page removal method.");
-
-        var addFromLibraryInfoMethod = pagesBuilderType.GetMethod(
-            "AddFromLibraryInfo",
-            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-            binder: null,
-            [typeof(string), typeof(IReadOnlyList<>).MakeGenericType(pageComponentBuilderType)],
-            modifiers: null)
-            ?? throw new InvalidOperationException("Unable to locate the ASP.NET Core page registration method.");
-
-        var assemblyNameProperty = pageComponentBuilderType.GetProperty(
-            "AssemblyName",
-            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException("Unable to locate the ASP.NET Core page builder assembly name property.");
-
-        var routeTemplatesProperty = pageComponentBuilderType.GetProperty(
-            "RouteTemplates",
-            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException("Unable to locate the ASP.NET Core page builder route templates property.");
-
-        var pageTypeProperty = pageComponentBuilderType.GetProperty(
-            "PageType",
-            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException("Unable to locate the ASP.NET Core page builder page type property.");
+        var pagesBuilder = ComponentApplicationBuilderAccessors.GetPages(applicationBuilder);
 
         var explicitPagesByAssembly = routes
             .GroupBy(route => route.PageType.Assembly.GetName().Name!, StringComparer.Ordinal)
@@ -103,12 +36,10 @@ public static class BlazorRouterEndpointConventionBuilderExtensions
                     .GroupBy(route => route.PageType)
                     .Select(pageGroup =>
                     {
-                        var pageBuilder = Activator.CreateInstance(pageComponentBuilderType)
-                            ?? throw new InvalidOperationException("Unable to create the ASP.NET Core page component builder.");
-
-                        assemblyNameProperty.SetValue(pageBuilder, group.Key);
-                        routeTemplatesProperty.SetValue(pageBuilder, pageGroup.Select(route => route.Template).ToArray());
-                        pageTypeProperty.SetValue(pageBuilder, pageGroup.Key);
+                        var pageBuilder = PageComponentBuilderAccessors.Create();
+                        PageComponentBuilderAccessors.SetAssemblyName(pageBuilder, group.Key);
+                        PageComponentBuilderAccessors.SetRouteTemplates(pageBuilder, pageGroup.Select(route => route.Template).ToArray());
+                        PageComponentBuilderAccessors.SetPageType(pageBuilder, pageGroup.Key);
                         return pageBuilder;
                     })
                     .ToArray(),
@@ -116,35 +47,65 @@ public static class BlazorRouterEndpointConventionBuilderExtensions
 
         foreach (var entry in explicitPagesByAssembly)
         {
-            removeFromAssemblyMethod.Invoke(pagesBuilder, [entry.Key]);
-
-            var listType = typeof(List<>).MakeGenericType(pageComponentBuilderType);
-            var list = Activator.CreateInstance(listType)
-                ?? throw new InvalidOperationException("Unable to create the ASP.NET Core page component builder list.");
-
-            var addMethod = listType.GetMethod("Add")
-                ?? throw new InvalidOperationException("Unable to add explicit page components to the ASP.NET Core page collection.");
-
-            foreach (var pageBuilder in entry.Value)
-            {
-                addMethod.Invoke(list, [pageBuilder]);
-            }
-
-            addFromLibraryInfoMethod.Invoke(pagesBuilder, [entry.Key, list]);
+            PageCollectionBuilderAccessors.RemoveFromAssembly(pagesBuilder, entry.Key);
+            PageCollectionBuilderAccessors.AddFromLibraryInfo(
+                pagesBuilder,
+                entry.Key,
+                CreatePageComponentBuilderArray(entry.Value));
         }
-
     }
 
-    private sealed class ComponentApplicationBuilderActionFactory(Assembly endpointsAssembly, IReadOnlyList<BlazorRouteDefinition> routes)
+    private static Array CreatePageComponentBuilderArray(object[] pageBuilders)
     {
-        private readonly Assembly _endpointsAssembly = endpointsAssembly;
-        private readonly IReadOnlyList<BlazorRouteDefinition> _routes = routes;
-
-        [RequiresUnreferencedCode("Uses reflection over ASP.NET Core internal Razor component endpoint builder types to register explicit component pages for interactive server hosting.")]
-        internal void Apply<TApplicationBuilder>(TApplicationBuilder applicationBuilder)
+        var array = Array.CreateInstance(pageBuilders[0].GetType(), pageBuilders.Length);
+        for (var index = 0; index < pageBuilders.Length; index++)
         {
-            ArgumentNullException.ThrowIfNull(applicationBuilder);
-            ApplyRoutesToApplicationBuilder(applicationBuilder, _endpointsAssembly, _routes);
+            array.SetValue(pageBuilders[index], index);
         }
+
+        return array;
     }
+
+    private static class EndpointConventionBuilderAccessors
+    {
+        [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "get_ComponentApplicationBuilderActions")]
+        [return: UnsafeAccessorType(ComponentApplicationBuilderActionsTypeName)]
+        internal static extern object GetComponentApplicationBuilderActions([UnsafeAccessorType("Microsoft.AspNetCore.Builder.RazorComponentsEndpointConventionBuilder, Microsoft.AspNetCore.Components.Endpoints")] object builder);
+    }
+
+    private static class ComponentApplicationBuilderAccessors
+    {
+        [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "get_Pages")]
+        [return: UnsafeAccessorType(PageCollectionBuilderTypeName)]
+        internal static extern object GetPages([UnsafeAccessorType(ComponentApplicationBuilderTypeName)] object applicationBuilder);
+    }
+
+    private static class PageCollectionBuilderAccessors
+    {
+        [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "RemoveFromAssembly")]
+        internal static extern void RemoveFromAssembly([UnsafeAccessorType(PageCollectionBuilderTypeName)] object pageCollectionBuilder, string assemblyName);
+
+        [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "AddFromLibraryInfo")]
+        internal static extern void AddFromLibraryInfo(
+            [UnsafeAccessorType(PageCollectionBuilderTypeName)] object pageCollectionBuilder,
+            string assemblyName,
+            [UnsafeAccessorType(PageComponentBuilderReadOnlyListTypeName)] object pages);
+    }
+
+    private static class PageComponentBuilderAccessors
+    {
+        [UnsafeAccessor(UnsafeAccessorKind.Constructor)]
+        [return: UnsafeAccessorType(PageComponentBuilderTypeName)]
+        internal static extern object Create();
+
+        [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "set_AssemblyName")]
+        internal static extern void SetAssemblyName([UnsafeAccessorType(PageComponentBuilderTypeName)] object pageComponentBuilder, string assemblyName);
+
+        [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "set_PageType")]
+        internal static extern void SetPageType([UnsafeAccessorType(PageComponentBuilderTypeName)] object pageComponentBuilder, Type pageType);
+
+        [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "set_RouteTemplates")]
+        internal static extern void SetRouteTemplates([UnsafeAccessorType(PageComponentBuilderTypeName)] object pageComponentBuilder, IReadOnlyList<string> routeTemplates);
+    }
+
 }

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Routing.Constraints;
 using Microsoft.AspNetCore.Routing.Template;
@@ -35,6 +36,7 @@ internal static class ExplicitRouteTableFactory
         return new ExplicitRouteTable(entries);
     }
 
+    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "The router only registers the built-in regex inline constraint mapping and does not enumerate or add arbitrary user-supplied constraint types.")]
     private static DefaultInlineConstraintResolver CreateConstraintResolver(IServiceProvider serviceProvider)
     {
         var routeOptions = new RouteOptions();
