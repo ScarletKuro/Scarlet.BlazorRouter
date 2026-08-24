@@ -211,7 +211,7 @@ The library throws if:
 
 ## Current Target
 
-- `net8.0`
+- `net10.0`
 
 ## Important Note
 

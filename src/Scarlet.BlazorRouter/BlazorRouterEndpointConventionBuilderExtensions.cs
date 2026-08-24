@@ -15,12 +15,37 @@ public static class BlazorRouterEndpointConventionBuilderExtensions
             "ApplicationBuilder",
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
 
-        if (applicationBuilderProperty?.GetValue(builder) is not { } applicationBuilder)
+        if (applicationBuilderProperty?.GetValue(builder) is { } applicationBuilder)
         {
-            throw new InvalidOperationException(
-                $"The provided builder type '{builderType.FullName}' does not expose the Razor component application builder.");
+            ApplyRoutesToApplicationBuilder(applicationBuilder, builderType.Assembly, routes);
+            return builder;
         }
 
+        var componentApplicationBuilderActionsProperty = builderType.GetProperty(
+            "ComponentApplicationBuilderActions",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+        if (componentApplicationBuilderActionsProperty?.GetValue(builder) is System.Collections.IList actions)
+        {
+            var applicationBuilderType = builderType.Assembly.GetType("Microsoft.AspNetCore.Components.Discovery.ComponentApplicationBuilder")
+                ?? throw new InvalidOperationException("Unable to locate the ASP.NET Core component application builder type.");
+
+            var delegateFactory = new ComponentApplicationBuilderActionFactory(builderType.Assembly, routes);
+            var delegateType = typeof(Action<>).MakeGenericType(applicationBuilderType);
+            var method = typeof(ComponentApplicationBuilderActionFactory)
+                .GetMethod(nameof(ComponentApplicationBuilderActionFactory.Apply), BindingFlags.Instance | BindingFlags.NonPublic)!
+                .MakeGenericMethod(applicationBuilderType);
+
+            actions.Add(Delegate.CreateDelegate(delegateType, delegateFactory, method));
+            return builder;
+        }
+
+        throw new InvalidOperationException(
+            $"The provided builder type '{builderType.FullName}' does not expose the Razor component application builder.");
+    }
+
+    private static void ApplyRoutesToApplicationBuilder(object applicationBuilder, Assembly endpointsAssembly, IReadOnlyList<BlazorRouteDefinition> routes)
+    {
         var applicationBuilderType = applicationBuilder.GetType();
         var pagesProperty = applicationBuilderType.GetProperty(
             "Pages",
@@ -33,7 +58,7 @@ public static class BlazorRouterEndpointConventionBuilderExtensions
         }
 
         var pagesBuilderType = pagesBuilder.GetType();
-        var pageComponentBuilderType = builderType.Assembly.GetType("Microsoft.AspNetCore.Components.Discovery.PageComponentBuilder")
+        var pageComponentBuilderType = endpointsAssembly.GetType("Microsoft.AspNetCore.Components.Discovery.PageComponentBuilder")
             ?? throw new InvalidOperationException("Unable to locate the ASP.NET Core page component builder type.");
 
         var removeFromAssemblyMethod = pagesBuilderType.GetMethod(
@@ -105,6 +130,17 @@ public static class BlazorRouterEndpointConventionBuilderExtensions
             addFromLibraryInfoMethod.Invoke(pagesBuilder, [entry.Key, list]);
         }
 
-        return builder;
+    }
+
+    private sealed class ComponentApplicationBuilderActionFactory(Assembly endpointsAssembly, IReadOnlyList<BlazorRouteDefinition> routes)
+    {
+        private readonly Assembly _endpointsAssembly = endpointsAssembly;
+        private readonly IReadOnlyList<BlazorRouteDefinition> _routes = routes;
+
+        internal void Apply<TApplicationBuilder>(TApplicationBuilder applicationBuilder)
+        {
+            ArgumentNullException.ThrowIfNull(applicationBuilder);
+            ApplyRoutesToApplicationBuilder(applicationBuilder, _endpointsAssembly, _routes);
+        }
     }
 }
