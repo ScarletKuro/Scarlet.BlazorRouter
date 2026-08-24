@@ -1,4 +1,5 @@
 using System.Runtime.ExceptionServices;
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -45,6 +46,7 @@ public sealed partial class BlazorRouter : IComponent, IHandleAfterRender, IDisp
     public RenderFragment<RouteData>? Found { get; set; }
 
     [Parameter]
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
     public Type? NotFoundPage { get; set; }
 
     [Parameter]

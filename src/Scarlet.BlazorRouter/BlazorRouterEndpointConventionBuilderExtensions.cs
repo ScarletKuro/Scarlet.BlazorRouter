@@ -1,9 +1,11 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 
 namespace Scarlet.BlazorRouter;
 
 public static class BlazorRouterEndpointConventionBuilderExtensions
 {
+    [RequiresUnreferencedCode("Uses reflection over ASP.NET Core internal Razor component endpoint builder types to register explicit component pages for interactive server hosting.")]
     public static TBuilder AddBlazorRouterRoutes<TBuilder>(this TBuilder builder, IReadOnlyList<BlazorRouteDefinition> routes)
         where TBuilder : class
     {
@@ -44,6 +46,7 @@ public static class BlazorRouterEndpointConventionBuilderExtensions
             $"The provided builder type '{builderType.FullName}' does not expose the Razor component application builder.");
     }
 
+    [RequiresUnreferencedCode("Uses reflection over ASP.NET Core internal Razor component endpoint builder types to register explicit component pages for interactive server hosting.")]
     private static void ApplyRoutesToApplicationBuilder(object applicationBuilder, Assembly endpointsAssembly, IReadOnlyList<BlazorRouteDefinition> routes)
     {
         var applicationBuilderType = applicationBuilder.GetType();
@@ -137,6 +140,7 @@ public static class BlazorRouterEndpointConventionBuilderExtensions
         private readonly Assembly _endpointsAssembly = endpointsAssembly;
         private readonly IReadOnlyList<BlazorRouteDefinition> _routes = routes;
 
+        [RequiresUnreferencedCode("Uses reflection over ASP.NET Core internal Razor component endpoint builder types to register explicit component pages for interactive server hosting.")]
         internal void Apply<TApplicationBuilder>(TApplicationBuilder applicationBuilder)
         {
             ArgumentNullException.ThrowIfNull(applicationBuilder);

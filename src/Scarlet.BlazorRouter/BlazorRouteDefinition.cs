@@ -9,7 +9,9 @@ public sealed class BlazorRouteDefinition
     }
 
     [SetsRequiredMembers]
-    public BlazorRouteDefinition(string template, Type pageType)
+    public BlazorRouteDefinition(
+        string template,
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] Type pageType)
     {
         Template = template;
         PageType = pageType;
@@ -17,5 +19,6 @@ public sealed class BlazorRouteDefinition
 
     public required string Template { get; init; }
 
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
     public required Type PageType { get; init; }
 }

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using Microsoft.AspNetCore.Components;
 
@@ -16,6 +17,8 @@ internal sealed class HotReloadCacheInvalidationRegistration : IDisposable
         _delegate = @delegate;
     }
 
+    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "Hot reload integration is optional and degrades to a no-op when the internal ASP.NET Core hot reload manager type is unavailable after trimming.")]
+    [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Hot reload integration is optional and degrades to a no-op when the internal ASP.NET Core hot reload manager members are unavailable after trimming.")]
     public static HotReloadCacheInvalidationRegistration Create(Action callback)
     {
         var hotReloadManagerType = typeof(NavigationManager).Assembly.GetType(
